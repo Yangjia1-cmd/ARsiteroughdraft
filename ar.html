@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Spawn &amp; Grow — AR Lens</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #000;
+    color: #eee;
+    font-family: 'Courier New', Courier, monospace;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+    overscroll-behavior: none;
+  }
+
+  /* ── Camera feed ─────────────────────────────────── */
+  #cam {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    background: #000;
+  }
+
+  /* ── 3D stage ────────────────────────────────────── */
+  /* #camera is the 3D rendering root (holds the perspective) and is the
+     element that blends with the video feed when Blend is on. */
+  #camera {
+    position: fixed; inset: 0;
+    perspective-origin: 50% 50%;
+    overflow: hidden;
+  }
+  #camera.blend { mix-blend-mode: screen; }
+  #world {
+    position: absolute; left: 50%; top: 50%;
+    width: 0; height: 0;
+    transform-style: preserve-3d;
+  }
+  .panel {
+    position: absolute;
+    transform-origin: 50% 50%;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    border: 1px solid rgba(255,255,255,0.35);
+    box-shadow: 0 0 60px rgba(0,0,0,0.6);
+    background: #111;
+  }
+  #camera.blend .panel { border-color: transparent; box-shadow: none; }
+  .panel.focus { border-color: rgba(255,255,255,0.9); }
+  .panel iframe {
+    display: block;
+    width: 100%; height: 100%;
+    border: 0;
+    background: #111;
+  }
+
+  /* ── Reticle ─────────────────────────────────────── */
+  #reticle {
+    position: fixed; left: 50%; top: 50%;
+    width: 18px; height: 18px;
+    margin: -9px 0 0 -9px;
+    pointer-events: none;
+    opacity: 0.8;
+  }
+  #reticle::before, #reticle::after {
+    content: ''; position: absolute; background: #fff;
+    mix-blend-mode: difference;
+  }
+  #reticle::before { left: 8px; top: 0; width: 2px; height: 18px; }
+  #reticle::after  { top: 8px; left: 0; height: 2px; width: 18px; }
+
+  /* ── Toolbar ─────────────────────────────────────── */
+  #bar {
+    position: fixed;
+    left: 50%; transform: translateX(-50%);
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    display: flex; gap: 6px;
+    padding: 6px;
+    background: rgba(17,17,17,0.82);
+    border: 1px solid #2e2e2e;
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    max-width: calc(100vw - 16px);
+    overflow-x: auto;
+    scrollbar-width: none;
+    z-index: 10;
+  }
+  #bar::-webkit-scrollbar { display: none; }
+  #bar.hidden { display: none; }
+  .tb {
+    flex: 0 0 auto;
+    min-width: 54px;
+    padding: 8px 6px 6px;
+    background: #222;
+    border: 1px solid #3a3a3a;
+    color: #ccc;
+    font-family: inherit;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    cursor: pointer;
+  }
+  .tb b { font-size: 16px; line-height: 1; font-weight: normal; color: #fff; }
+  .tb:active { background: #3a3a3a; }
+  .tb.on { border-color: #bbb; color: #fff; background: #2e2e2e; }
+
+  #showui {
+    position: fixed;
+    right: calc(12px + env(safe-area-inset-right));
+    top: calc(12px + env(safe-area-inset-top));
+    width: 34px; height: 34px;
+    background: rgba(17,17,17,0.7);
+    border: 1px solid #3a3a3a;
+    color: #ccc; font: inherit; font-size: 14px;
+    display: none;
+    z-index: 10;
+  }
+  #showui.visible { display: block; }
+
+  #toast {
+    position: fixed; left: 50%; top: calc(16px + env(safe-area-inset-top));
+    transform: translateX(-50%);
+    background: rgba(17,17,17,0.85);
+    border: 1px solid #2e2e2e;
+    padding: 7px 12px;
+    font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: #ccc;
+    opacity: 0; transition: opacity 0.25s;
+    pointer-events: none;
+    z-index: 20;
+    white-space: nowrap;
+  }
+  #toast.show { opacity: 1; }
+
+  /* ── Start screen ────────────────────────────────── */
+  #start {
+    position: fixed; inset: 0;
+    background: #111;
+    display: flex; align-items: center; justify-content: center;
+    padding: 28px;
+    z-index: 30;
+  }
+  #start .box { max-width: 420px; display: flex; flex-direction: column; gap: 18px; }
+  #start h1 { font-size: 26px; font-weight: normal; letter-spacing: 0.02em; }
+  #start p  { font-size: 12px; line-height: 1.6; color: #888; }
+  #start ul { font-size: 11px; line-height: 1.7; color: #777; list-style: none; }
+  #start ul li::before { content: '— '; color: #444; }
+  #go {
+    padding: 14px;
+    background: #eee; color: #111;
+    border: 0;
+    font: inherit; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
+    cursor: pointer;
+  }
+  #err { font-size: 11px; color: #d77; line-height: 1.5; display: none; }
+</style>
+</head>
+<body>
+
+<video id="cam" autoplay playsinline muted></video>
+
+<div id="camera"><div id="world"></div></div>
+<div id="reticle"></div>
+
+<div id="bar">
+  <button class="tb" id="b-pin"><b>⌖</b>Pin here</button>
+  <button class="tb" id="b-add"><b>+</b>Window</button>
+  <button class="tb" id="b-near"><b>↓</b>Closer</button>
+  <button class="tb" id="b-far"><b>↑</b>Farther</button>
+  <button class="tb" id="b-blend"><b>◐</b>Blend</button>
+  <button class="tb" id="b-del"><b>×</b>Remove</button>
+  <button class="tb" id="b-hide"><b>–</b>Hide UI</button>
+</div>
+<button id="showui">☰</button>
+<div id="toast"></div>
+
+<div id="start">
+  <div class="box">
+    <h1>Spawn &amp; Grow<br>— AR Lens</h1>
+    <p>Opens your camera and pins the live site into the space around you.
+       Move your phone to look around. The site stays where you put it,
+       and you can still draw on it.</p>
+    <ul>
+      <li>Pin here: moves the window you're looking at to the crosshair</li>
+      <li>+ Window: adds another copy wherever you point</li>
+      <li>Blend: hides the black background so only the type floats in the room</li>
+      <li>Landscape works best for using the controls</li>
+    </ul>
+    <button id="go">Start camera</button>
+    <div id="err"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ── Config ──────────────────────────────────────────
+  const SITE_URL  = 'index.html';
+  const PANEL_W   = 1024;           // CSS px the site is laid out at
+  const PANEL_H   = 700;
+  const MAX_PANELS = 4;
+  const FOV_LONG  = 64 * Math.PI / 180;   // approx. field of view across the long screen edge
+
+  const $ = id => document.getElementById(id);
+  const video = $('cam'), cameraEl = $('camera'), world = $('world');
+
+  // ── Tiny quaternion / vector helpers (three.js conventions: y up, camera looks -z) ──
+  const qMul = (a, b) => [
+    a[0]*b[3] + a[3]*b[0] + a[1]*b[2] - a[2]*b[1],
+    a[1]*b[3] + a[3]*b[1] + a[2]*b[0] - a[0]*b[2],
+    a[2]*b[3] + a[3]*b[2] + a[0]*b[1] - a[1]*b[0],
+    a[3]*b[3] - a[0]*b[0] - a[1]*b[1] - a[2]*b[2],
+  ];
+  const qNorm = q => { const l = Math.hypot(...q) || 1; return q.map(v => v / l); };
+  const qAxis = (ax, ay, az, ang) => { const s = Math.sin(ang/2); return [ax*s, ay*s, az*s, Math.cos(ang/2)]; };
+  function qEulerYXZ(x, y, z) {
+    const c1 = Math.cos(x/2), c2 = Math.cos(y/2), c3 = Math.cos(z/2);
+    const s1 = Math.sin(x/2), s2 = Math.sin(y/2), s3 = Math.sin(z/2);
+    return [
+      s1*c2*c3 + c1*s2*s3,
+      c1*s2*c3 - s1*c2*s3,
+      c1*c2*s3 - s1*s2*c3,
+      c1*c2*c3 + s1*s2*s3,
+    ];
+  }
+  function qToMat(q) {   // row-major 3x3
+    const [x, y, z, w] = q;
+    return [
+      [1-2*(y*y+z*z), 2*(x*y-z*w),   2*(x*z+y*w)],
+      [2*(x*y+z*w),   1-2*(x*x+z*z), 2*(y*z-x*w)],
+      [2*(x*z-y*w),   2*(y*z+x*w),   1-2*(x*x+y*y)],
+    ];
+  }
+  const cross = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+  const dot   = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+  const vNorm = v => { const l = Math.hypot(...v) || 1; return v.map(c => c / l); };
+
+  // 4x4 row-major (three coords) -> CSS matrix3d string, flipping the y axis (CSS y points down)
+  function toCSS(m) {
+    const out = [];
+    for (let c = 0; c < 4; c++)
+      for (let r = 0; r < 4; r++) {
+        const flip = (r === 1) !== (c === 1);
+        out.push((flip ? -m[r][c] : m[r][c]).toFixed(6));
+      }
+    return `matrix3d(${out.join(',')})`;
+  }
+
+  // ── Orientation state ───────────────────────────────
+  let qTarget = [0, 0, 0, 1];
+  let qCur    = [0, 0, 0, 1];
+  let gotSensor = false;
+  let dragYaw = 0, dragPitch = 0;   // fallback (desktop / no gyro)
+  const Q_BACK = [-Math.SQRT1_2, 0, 0, Math.SQRT1_2];   // -90° about X: camera looks out the back of the phone
+
+  function screenAngle() {
+    if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
+    return window.orientation || 0;
+  }
+
+  function onOrient(e) {
+    if (e.alpha == null && e.beta == null) return;
+    gotSensor = true;
+    const d2r = Math.PI / 180;
+    let q = qEulerYXZ((e.beta || 0) * d2r, (e.alpha || 0) * d2r, -(e.gamma || 0) * d2r);
+    q = qMul(q, Q_BACK);
+    q = qMul(q, qAxis(0, 0, 1, -screenAngle() * d2r));
+    qTarget = q;
+  }
+
+  // Drag-to-look fallback when there's no gyroscope (e.g. testing on a laptop)
+  let dragging = null;
+  cameraEl.addEventListener('pointerdown', e => {
+    if (gotSensor || e.target !== cameraEl) return;
+    dragging = { x: e.clientX, y: e.clientY };
+  });
+  window.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    dragYaw   += (e.clientX - dragging.x) * 0.004;
+    dragPitch += (e.clientY - dragging.y) * 0.004;
+    dragPitch = Math.max(-1.4, Math.min(1.4, dragPitch));
+    dragging = { x: e.clientX, y: e.clientY };
+    qTarget = qEulerYXZ(dragPitch, dragYaw, 0);
+  });
+  window.addEventListener('pointerup', () => dragging = null);
+
+  // ── Projection ─────────────────────────────────────
+  let F = 800;
+  function resize() {
+    F = Math.max(innerWidth, innerHeight) / 2 / Math.tan(FOV_LONG / 2);
+    cameraEl.style.perspective = F + 'px';
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  // ── Panels ─────────────────────────────────────────
+  const panels = [];   // { el, dir:[x,y,z], dist }
+
+  function camForward() {
+    const R = qToMat(qCur);
+    return vNorm([-R[0][2], -R[1][2], -R[2][2]]);
+  }
+  function defaultDist() {
+    // make the window about 90% of the short screen edge when first placed
+    return PANEL_W * F / (0.9 * Math.min(innerWidth, innerHeight));
+  }
+
+  function installTouchShim(win) {
+    // The site listens for mouse events only; translate touch drags on the
+    // canvas area into mouse events so drawing works on a phone.
+    const doc = win.document;
+    if (!doc || doc.__arShim) return;
+    doc.__arShim = true;
+    let target = null;
+    const fire = (type, t, el) => el.dispatchEvent(new win.MouseEvent(type, {
+      bubbles: true, cancelable: true, view: win,
+      clientX: t.clientX, clientY: t.clientY, screenX: t.screenX, screenY: t.screenY,
+      button: 0, buttons: type === 'mouseup' || type === 'click' ? 0 : 1,
+    }));
+    doc.addEventListener('touchstart', e => {
+      if (e.touches.length > 1) { target = null; return; }
+      const t = e.changedTouches[0];
+      const el = doc.elementFromPoint(t.clientX, t.clientY);
+      if (!el || !el.closest('#canvas-area')) { target = null; return; }
+      target = el;
+      e.preventDefault();
+      fire('mousemove', t, el);
+      fire('mousedown', t, el);
+    }, { passive: false, capture: true });
+    doc.addEventListener('touchmove', e => {
+      if (!target) return;
+      e.preventDefault();
+      fire('mousemove', e.changedTouches[0], target);
+    }, { passive: false, capture: true });
+    const end = e => {
+      if (!target) return;
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      fire('mouseup', t, target);
+      fire('click', t, target);
+      target = null;
+    };
+    doc.addEventListener('touchend', end, { passive: false, capture: true });
+    doc.addEventListener('touchcancel', end, { passive: false, capture: true });
+  }
+
+  function addPanel(dir, dist) {
+    if (panels.length >= MAX_PANELS) { toast(`max ${MAX_PANELS} windows`); return null; }
+    const el = document.createElement('div');
+    el.className = 'panel';
+    el.style.width  = PANEL_W + 'px';
+    el.style.height = PANEL_H + 'px';
+    el.style.left   = (-PANEL_W / 2) + 'px';
+    el.style.top    = (-PANEL_H / 2) + 'px';
+    const fr = document.createElement('iframe');
+    fr.src = SITE_URL;
+    fr.setAttribute('allow', 'clipboard-write');
+    fr.addEventListener('load', () => {
+      try { installTouchShim(fr.contentWindow); } catch (err) { console.warn('touch shim failed', err); }
+    });
+    el.appendChild(fr);
+    world.appendChild(el);
+    const p = { el, dir: vNorm(dir), dist: dist || defaultDist() };
+    panels.push(p);
+    return p;
+  }
+
+  function panelMatrix(p) {
+    const pos = p.dir.map(c => c * p.dist);
+    const z = p.dir.map(c => -c);                 // face back toward the viewer
+    let x = cross([0, 1, 0], z);                  // keep it upright
+    if (Math.hypot(...x) < 1e-3) x = [1, 0, 0];   // looking straight up/down
+    x = vNorm(x);
+    const y = cross(z, x);
+    return [
+      [x[0], y[0], z[0], pos[0]],
+      [x[1], y[1], z[1], pos[1]],
+      [x[2], y[2], z[2], pos[2]],
+      [0, 0, 0, 1],
+    ];
+  }
+
+  function focusedPanel() {
+    const f = camForward();
+    let best = null, bestDot = -2;
+    for (const p of panels) {
+      const d = dot(f, p.dir);
+      if (d > bestDot) { bestDot = d; best = p; }
+    }
+    return best;
+  }
+
+  // ── Render loop ────────────────────────────────────
+  function frame() {
+    // smooth sensor jitter a little
+    let t = qTarget;
+    if (dot(qCur, t) + qCur[3]*t[3] < 0) t = t.map(v => -v);
+    qCur = qNorm(qCur.map((v, i) => v + (t[i] - v) * 0.45));
+
+    const R = qToMat(qCur);
+    // view = inverse camera rotation = transpose
+    const V = [
+      [R[0][0], R[1][0], R[2][0], 0],
+      [R[0][1], R[1][1], R[2][1], 0],
+      [R[0][2], R[1][2], R[2][2], 0],
+      [0, 0, 0, 1],
+    ];
+    world.style.transform = `translateZ(${F}px) ${toCSS(V)}`;
+
+    const fwd = [-R[0][2], -R[1][2], -R[2][2]];
+    const focus = focusedPanel();
+    for (const p of panels) {
+      p.el.style.transform = toCSS(panelMatrix(p));
+      // hide windows that are behind you (CSS 3D can't clip them properly)
+      p.el.style.visibility = dot(fwd, p.dir) > 0.15 ? 'visible' : 'hidden';
+      p.el.classList.toggle('focus', p === focus && panels.length > 1);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ── UI ─────────────────────────────────────────────
+  let toastTimer;
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 1600);
+  }
+
+  const tap = (id, fn) => $(id).addEventListener('click', e => { e.stopPropagation(); fn(); });
+
+  tap('b-pin', () => {
+    const p = focusedPanel();
+    if (!p) { addPanel(camForward()); return; }
+    p.dir = camForward();
+    toast('pinned');
+  });
+  tap('b-add', () => { if (addPanel(camForward())) toast('window added'); });
+  tap('b-near', () => { const p = focusedPanel(); if (p) p.dist = Math.max(F * 0.6, p.dist / 1.25); });
+  tap('b-far',  () => { const p = focusedPanel(); if (p) p.dist = Math.min(F * 12, p.dist * 1.25); });
+  tap('b-blend', () => {
+    const on = cameraEl.classList.toggle('blend');
+    $('b-blend').classList.toggle('on', on);
+    toast(on ? 'blend on: black is see-through' : 'blend off');
+  });
+  tap('b-del', () => {
+    const p = focusedPanel();
+    if (!p) return;
+    p.el.remove();
+    panels.splice(panels.indexOf(p), 1);
+    toast(panels.length ? 'removed' : 'removed: tap Pin here to bring it back');
+  });
+  tap('b-hide', () => { $('bar').classList.add('hidden'); $('showui').classList.add('visible'); });
+  tap('showui', () => { $('bar').classList.remove('hidden'); $('showui').classList.remove('visible'); });
+
+  // ── Start ──────────────────────────────────────────
+  function showErr(msg) { const e = $('err'); e.style.display = 'block'; e.innerHTML = msg; }
+
+  $('go').addEventListener('click', async () => {
+    // iOS needs motion permission requested directly inside the tap
+    let motionPromise = Promise.resolve('granted');
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      motionPromise = DeviceOrientationEvent.requestPermission().catch(() => 'denied');
+    }
+
+    if (!window.isSecureContext) {
+      showErr('The camera only works over <b>https</b> (or localhost). Open this page from your GitHub Pages link.');
+      return;
+    }
+
+    let stream = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+      });
+    } catch (err) {
+      showErr('Couldn\'t open the camera (' + (err.name || err) + '). Check that this site is allowed to use the camera.');
+      return;
+    }
+    video.srcObject = stream;
+    video.play().catch(() => {});
+
+    const motion = await motionPromise;
+    if (motion === 'granted') window.addEventListener('deviceorientation', onOrient);
+
+    $('start').style.display = 'none';
+    requestAnimationFrame(frame);
+
+    // Place the first window once we know which way the phone is pointing
+    setTimeout(() => {
+      qCur = qTarget.slice();
+      addPanel(camForward());
+      if (!gotSensor) toast(motion === 'granted' ? 'no gyroscope: drag the background to look around'
+                                                 : 'motion access denied: drag to look around');
+    }, 500);
+  });
+})();
+</script>
+</body>
+</html>
