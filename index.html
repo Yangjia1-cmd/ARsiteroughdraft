@@ -1,0 +1,2448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spawn & Grow</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      background: #111;
+      color: #fff;
+      font-family: 'Courier New', Courier, monospace;
+    }
+
+    /* ── Left Panel ─────────────────────────────────────── */
+    #left-panel {
+      width: 240px;
+      min-width: 240px;
+      display: flex;
+      flex-direction: column;
+      background: #181818;
+      border-right: 1px solid #2a2a2a;
+      overflow-y: auto;
+    }
+
+    /* Tabs */
+    #panel-tabs {
+      display: flex;
+      border-bottom: 1px solid #2a2a2a;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    .panel-tab {
+      flex: 1;
+      padding: 9px 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      color: #404040;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      user-select: none;
+      transition: color 0.15s, border-color 0.15s, background 0.12s;
+    }
+
+    .panel-tab.active {
+      color: #eee;
+      border-bottom-color: #eee;
+    }
+
+    .panel-tab:hover:not(.active) {
+      color: #888;
+      background: #1e1e1e;
+    }
+
+    .panel-tab svg {
+      width: 20px;
+      height: 20px;
+      display: block;
+      pointer-events: none;
+    }
+
+    /* Tooltip */
+    .panel-tab::after {
+      content: attr(data-label);
+      position: absolute;
+      top: calc(100% + 5px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #161616;
+      color: #bbb;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 9px;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      padding: 3px 7px;
+      border: 1px solid #2e2e2e;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.12s;
+      z-index: 999;
+    }
+
+    .panel-tab:hover::after { opacity: 1; }
+
+    /* Keep edge tooltips from overflowing the panel */
+    .panel-tab:nth-child(1)::after,
+    .panel-tab:nth-child(2)::after { left: 0; transform: none; }
+    .panel-tab:nth-last-child(1)::after,
+    .panel-tab:nth-last-child(2)::after { left: auto; right: 0; transform: none; }
+
+    /* Sections */
+    .panel-section {
+      display: none;
+      flex-direction: column;
+      gap: 18px;
+      padding: 18px 16px;
+    }
+
+    .panel-section.active {
+      display: flex;
+    }
+
+    /* Section label */
+    .sec-label {
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #555;
+      margin-bottom: 2px;
+    }
+
+    /* Textbox */
+    #text-input {
+      width: 100%;
+      min-height: 72px;
+      background: #0e0e0e;
+      border: 1px solid #2e2e2e;
+      color: #ddd;
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 9px 10px;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #text-input:focus { border-color: #555; }
+    #text-input::placeholder { color: #3a3a3a; }
+
+    /* Buttons */
+    .btn-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 7px 4px;
+      background: #222;
+      border: 1px solid #3a3a3a;
+      color: #ccc;
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
+    }
+
+    .btn:hover  { background: #2e2e2e; border-color: #555; }
+    .btn:active { background: #3a3a3a; }
+    .btn-on     { background: #2e2e2e; border-color: #bbb; color: #fff; }
+
+    /* Line spacing pills */
+    .ls-row { display:flex; align-items:center; gap:5px; margin-top:5px; }
+    .ls-label { font-size:9px; color:#555; letter-spacing:0.04em; text-transform:uppercase; white-space:nowrap; }
+    .ls-btn {
+      flex:1; padding:4px 2px;
+      background:#1a1a1a; border:1px solid #2e2e2e; color:#666;
+      font-family:inherit; font-size:9px; letter-spacing:0.03em;
+      cursor:pointer; transition:background 0.1s, border-color 0.1s;
+    }
+    .ls-btn:hover { background:#252525; border-color:#444; color:#aaa; }
+    .ls-btn.ls-on { background:#252525; border-color:#888; color:#ccc; }
+
+    /* Slider controls */
+    .ctrl {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .ctrl-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #888;
+    }
+
+    .ctrl-val {
+      color: #ccc;
+      min-width: 24px;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 3px;
+      accent-color: #aaa;
+      cursor: pointer;
+    }
+
+    /* Color row — shared class so both tabs can use it */
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .color-swatch {
+      width: 22px;
+      height: 22px;
+      background: #ffffff;
+      border: 1px solid #444;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .color-label {
+      font-size: 10px;
+      color: #888;
+    }
+
+    /* Keep old IDs working for spawn section */
+    #color-row   { display: flex; align-items: center; gap: 8px; }
+    #color-swatch { width: 22px; height: 22px; background: #ffffff; border: 1px solid #444; cursor: pointer; flex-shrink: 0; }
+    #color-label  { font-size: 10px; color: #888; }
+
+    input[type="color"] { display: none; }
+
+    /* Textarea generic — both tabs share same styling via class */
+    .tab-textarea {
+      width: 100%;
+      min-height: 72px;
+      background: #0e0e0e;
+      border: 1px solid #2e2e2e;
+      color: #ddd;
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 9px 10px;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .tab-textarea:focus       { border-color: #555; }
+    .tab-textarea::placeholder { color: #3a3a3a; }
+
+    /* Divider */
+    .divider {
+      height: 1px;
+      background: #2a2a2a;
+    }
+
+    /* ── Pattern tiles ──────────────────────────────────────── */
+    .pat-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+    }
+
+    .pat-tile {
+      background: #1a1a1a;
+      border: 1px solid #2e2e2e;
+      cursor: pointer;
+      padding: 3px 3px 2px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      transition: border-color 0.12s, background 0.12s;
+    }
+
+    .pat-tile:hover { border-color: #555; background: #222; }
+    .pat-tile.pat-on { border-color: #aaa; background: #252525; }
+
+    .pat-tile canvas {
+      width: 100%;
+      aspect-ratio: 1;
+      display: block;
+      image-rendering: pixelated;
+    }
+
+    .pat-tile-label {
+      font-size: 6.5px;
+      color: #444;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+    }
+
+    .pat-tile.pat-on .pat-tile-label { color: #999; }
+
+    #main-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Save button ────────────────────────────────────── */
+    #btn-save {
+      position: absolute;
+      top: 14px;
+      right: 18px;
+      z-index: 10;
+      padding: 7px 18px;
+      background: #1e1e1e;
+      border: 1px solid #3a3a3a;
+      color: #ccc;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+    }
+    #btn-save:hover { background: #2a2a2a; border-color: #666; color: #fff; }
+
+    /* ── Save modal ─────────────────────────────────────── */
+    #save-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    #save-modal.active { display: flex; }
+
+    #save-dialog {
+      background: #161616;
+      border: 1px solid #2e2e2e;
+      padding: 28px 28px 22px;
+      width: 320px;
+      font-family: 'Courier New', Courier, monospace;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    #save-dialog h2 {
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #888;
+      margin: 0;
+      font-weight: normal;
+    }
+
+    .save-section-label {
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #555;
+      margin-bottom: 8px;
+    }
+
+    .save-formats {
+      display: flex;
+      gap: 6px;
+    }
+
+    .save-fmt {
+      flex: 1;
+      padding: 8px 4px;
+      background: #1e1e1e;
+      border: 1px solid #333;
+      color: #888;
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.1s, border-color 0.1s, color 0.1s;
+    }
+    .save-fmt:hover      { border-color: #555; color: #ccc; background: #252525; }
+    .save-fmt.save-fmt-on { border-color: #aaa; color: #fff; background: #282828; }
+
+    .save-transp-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .save-transp-row input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      accent-color: #aaa;
+      cursor: pointer;
+    }
+
+    .save-transp-row span {
+      font-size: 10px;
+      color: #999;
+      letter-spacing: 0.05em;
+    }
+
+    .save-transp-row input:disabled + span { color: #444; }
+
+    #save-hint {
+      font-size: 9px;
+      color: #3e3e3e;
+      letter-spacing: 0.03em;
+      line-height: 1.5;
+      margin-top: -8px;
+    }
+
+    .save-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    #save-cancel {
+      padding: 8px 16px;
+      background: transparent;
+      border: 1px solid #333;
+      color: #666;
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: border-color 0.1s, color 0.1s;
+    }
+    #save-cancel:hover { border-color: #555; color: #aaa; }
+
+    #save-download {
+      padding: 8px 20px;
+      background: #252525;
+      border: 1px solid #555;
+      color: #ddd;
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.1s, border-color 0.1s;
+    }
+    #save-download:hover    { background: #2e2e2e; border-color: #aaa; color: #fff; }
+    #save-download:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── Layer system ────────────────────────────────────────── */
+    /* isolate so blend modes don't leak outside canvas-area */
+    #canvas-area { isolation: isolate; }
+
+    #sec-layers {
+      flex-shrink: 0;
+      padding: 8px 10px 10px;
+      border-top: 1px solid #1e1e1e;
+    }
+    .layers-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    #layer-list { display: flex; flex-direction: column; }
+    .layer-empty {
+      color: #2a2a2a;
+      font-size: 9px;
+      padding: 4px 0;
+      letter-spacing: 0.05em;
+    }
+    .layer-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 0 2px;
+    }
+    .layer-thumb {
+      flex-shrink: 0;
+      display: block;
+      border-radius: 2px;
+      background: #000;
+    }
+    .layer-name {
+      flex: 1;
+      min-width: 0;
+      font-size: 9px;
+      color: #555;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .layer-icon-btn {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      color: #444;
+      cursor: pointer;
+      font-size: 11px;
+      padding: 0 1px;
+      line-height: 1;
+      font-family: 'Courier New', monospace;
+    }
+    .layer-icon-btn:hover { color: #aaa; }
+    .layer-del-btn { color: #252525; }
+    .layer-del-btn:hover { color: #c33; }
+    .layer-blend-sel {
+      flex-shrink: 0;
+      background: #111;
+      border: 1px solid #222;
+      color: #555;
+      font-size: 8px;
+      padding: 2px 3px;
+      max-width: 64px;
+      font-family: 'Courier New', monospace;
+      cursor: pointer;
+    }
+    .layer-op-row {
+      padding: 0 0 5px;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    .layer-op-slider {
+      width: 100%;
+      height: 10px;
+      cursor: pointer;
+    }
+    #btn-pin {
+      position: absolute;
+      bottom: 18px;
+      right: 78px;
+      z-index: 10;
+      padding: 6px 14px;
+      background: #1a1a1a;
+      border: 1px solid #2e2e2e;
+      color: #666;
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    #btn-pin:hover { border-color: #666; color: #ccc; }
+
+    /* ── New-document modal ─────────────────────────────── */
+    #new-doc-modal {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.78);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #new-doc-modal.hidden { display: none; }
+
+    #new-doc-dialog {
+      background: #161616;
+      border: 1px solid #2e2e2e;
+      width: 520px;
+      max-width: 96vw;
+      max-height: 92vh;
+      overflow-y: auto;
+      font-family: 'Courier New', Courier, monospace;
+      display: flex; flex-direction: column; gap: 0;
+    }
+
+    .nd-header {
+      padding: 22px 26px 14px;
+      border-bottom: 1px solid #222;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nd-header h2 {
+      font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: #777; font-weight: normal; margin: 0;
+    }
+    #nd-new-shortcut {
+      font-size: 9px; color: #333; letter-spacing: 0.05em;
+    }
+
+    .nd-section { padding: 18px 26px; border-bottom: 1px solid #1e1e1e; }
+
+    .nd-section-label {
+      font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: #444; margin-bottom: 10px;
+    }
+
+    /* Preset tiles */
+    .nd-presets-row {
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .nd-preset {
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+      padding: 8px 10px 7px;
+      background: #1a1a1a; border: 1px solid #2a2a2a;
+      color: #555; font-family: inherit; font-size: 8.5px;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      cursor: pointer; transition: border-color 0.1s, color 0.1s, background 0.1s;
+    }
+    .nd-preset:hover { border-color: #555; color: #aaa; background: #1f1f1f; }
+    .nd-preset.nd-on { border-color: #888; color: #ccc; background: #222; }
+    .nd-thumb {
+      background: #2a2a2a; border: 1px solid #3a3a3a;
+      transition: background 0.1s;
+    }
+    .nd-preset.nd-on .nd-thumb { background: #444; border-color: #666; }
+
+    /* Dimensions row */
+    .nd-dims-row {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .nd-dim-group {
+      display: flex; align-items: center; gap: 7px; flex: 1;
+    }
+    .nd-dim-label {
+      font-size: 9px; color: #555; letter-spacing: 0.08em; text-transform: uppercase;
+      min-width: 12px;
+    }
+    .nd-num {
+      flex: 1; background: #0e0e0e; border: 1px solid #2e2e2e; color: #ddd;
+      font-family: inherit; font-size: 13px; padding: 7px 10px;
+      outline: none; transition: border-color 0.12s;
+      -moz-appearance: textfield;
+    }
+    .nd-num::-webkit-outer-spin-button,
+    .nd-num::-webkit-inner-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
+    .nd-num:focus { border-color: #555; }
+    .nd-unit-lbl { font-size: 9px; color: #555; letter-spacing: 0.06em; min-width: 18px; }
+    .nd-x { font-size: 11px; color: #333; }
+
+    .nd-unit-row {
+      display: flex; align-items: center; gap: 12px; margin-top: 10px;
+    }
+    .nd-unit-btns { display: flex; gap: 4px; }
+    .nd-unit-btn {
+      padding: 5px 11px;
+      background: #1a1a1a; border: 1px solid #2a2a2a;
+      color: #555; font-family: inherit; font-size: 9px;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      cursor: pointer; transition: border-color 0.1s, color 0.1s, background 0.1s;
+    }
+    .nd-unit-btn:hover  { border-color: #555; color: #aaa; background: #1f1f1f; }
+    .nd-unit-btn.nd-on  { border-color: #888; color: #ccc; background: #222; }
+    .nd-res-wrap {
+      display: none; align-items: center; gap: 7px;
+    }
+    .nd-res-wrap .nd-num { width: 62px; }
+
+    /* Orientation */
+    .nd-orient-row { display: flex; gap: 8px; }
+    .nd-orient-btn {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;
+      padding: 10px 8px 8px;
+      background: #1a1a1a; border: 1px solid #2a2a2a;
+      color: #555; font-family: inherit; font-size: 9px;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      cursor: pointer; transition: border-color 0.1s, color 0.1s, background 0.1s;
+    }
+    .nd-orient-btn:hover { border-color: #555; color: #aaa; background: #1f1f1f; }
+    .nd-orient-btn.nd-on { border-color: #888; color: #ccc; background: #222; }
+    .nd-orient-btn svg { display: block; }
+
+    /* Background color swatches */
+    .nd-bg-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .nd-bg-swatch {
+      width: 38px; height: 38px; border: 2px solid transparent;
+      cursor: pointer; flex-shrink: 0; transition: border-color 0.1s;
+    }
+    .nd-bg-swatch:hover { border-color: #666; }
+    .nd-bg-swatch.nd-on { border-color: #aaa; }
+    .nd-bg-custom {
+      width: 38px; height: 38px; border: 2px solid #2a2a2a;
+      cursor: pointer; position: relative; flex-shrink: 0;
+      transition: border-color 0.1s;
+      background: repeating-conic-gradient(#333 0% 25%, #1a1a1a 0% 50%) 0 0 / 10px 10px;
+    }
+    .nd-bg-custom:hover { border-color: #666; }
+    .nd-bg-custom.nd-on { border-color: #aaa; }
+    .nd-bg-custom input[type="color"] { display: none; }
+
+    /* Actions */
+    .nd-actions {
+      padding: 18px 26px 22px;
+      display: flex; gap: 10px; justify-content: flex-end;
+    }
+    #nd-create {
+      padding: 10px 28px;
+      background: #eeeeee; border: none; color: #111;
+      font-family: inherit; font-size: 10px;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      cursor: pointer; transition: background 0.12s;
+    }
+    #nd-create:hover { background: #ffffff; }
+
+    /* ── Canvas area ────────────────────────────────────── */
+    /* Auto mode: wrapper fills area, canvas fills wrapper */
+    #canvas-area {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: #111;
+      display: flex;
+      align-items: stretch;
+    }
+    /* Fixed mode (user picked a document size): centered workbench */
+    #canvas-area.fixed-mode {
+      overflow: auto;
+      background: #2d2d2d;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    #canvas-wrapper {
+      position: relative;
+      flex: 1;   /* fills canvas-area in auto mode */
+    }
+    #canvas-area.fixed-mode #canvas-wrapper {
+      flex: 0 0 auto;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05);
+    }
+
+    #btn-new {
+      position: absolute; top: 14px; left: 18px; z-index: 10;
+      padding: 7px 16px;
+      background: #1e1e1e; border: 1px solid #3a3a3a;
+      color: #555; font-family: 'Courier New', Courier, monospace;
+      font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+      cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s;
+    }
+    #btn-new:hover { background: #2a2a2a; border-color: #666; color: #ccc; }
+
+    /* ── Text-layers panel (top-right of canvas area) ───────── */
+    #text-layers-panel {
+      position: absolute;
+      top: 52px;
+      right: 12px;
+      width: 210px;
+      max-height: calc(100% - 70px);
+      overflow-y: auto;
+      background: rgba(18,18,18,0.95);
+      border: 1px solid #2e2e2e;
+      z-index: 50;
+      font-family: 'Courier New', Courier, monospace;
+      pointer-events: auto;
+    }
+
+    .tl-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px 6px;
+      border-bottom: 1px solid #222;
+    }
+    .tl-title {
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #555;
+    }
+    #tl-add-layer {
+      background: none;
+      border: 1px solid #3a3a3a;
+      color: #888;
+      font-size: 16px;
+      line-height: 1;
+      width: 22px; height: 22px;
+      cursor: pointer;
+      padding: 0;
+      border-radius: 3px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #tl-add-layer:hover { border-color: #666; color: #ccc; }
+
+    #text-layers-list { display: flex; flex-direction: column; }
+
+    .tl-empty {
+      font-size: 9px;
+      color: #2a2a2a;
+      padding: 10px;
+      letter-spacing: 0.04em;
+      text-align: center;
+    }
+
+    .tl-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 8px;
+      border-bottom: 1px solid #1a1a1a;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .tl-item:hover     { background: #1c1c1c; }
+    .tl-item.tl-selected { background: #202020; outline: 1px solid #444; outline-offset: -1px; }
+
+    .tl-thumb {
+      flex-shrink: 0;
+      display: block;
+      border-radius: 2px;
+      background: #000;
+    }
+
+    .tl-name {
+      flex: 1;
+      min-width: 0;
+      font-size: 8.5px;
+      color: #666;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      letter-spacing: 0.04em;
+    }
+    .tl-item.tl-selected .tl-name { color: #bbb; }
+
+    .tl-btn {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      color: #333;
+      cursor: pointer;
+      font-size: 11px;
+      padding: 0 1px;
+      line-height: 1;
+      font-family: 'Courier New', monospace;
+      transition: color 0.1s;
+    }
+    .tl-btn:hover  { color: #aaa; }
+    .tl-del:hover  { color: #c33; }
+
+    /* drag handle */
+    .tl-grip {
+      cursor: grab;
+      color: #555;
+      font-size: 14px;
+      padding: 0 4px 0 2px;
+      flex-shrink: 0;
+      user-select: none;
+    }
+    .tl-grip:active { cursor: grabbing; }
+
+    /* item being dragged */
+    .tl-dragging { opacity: 0.35; }
+
+    /* drop-target highlight */
+    .tl-drag-over {
+      border-top: 2px solid #888 !important;
+      background: rgba(255,255,255,0.04);
+    }
+
+    /* locked background layer row */
+    .tl-bg-layer { opacity: 0.75; cursor: default; }
+    .tl-bg-layer .tl-name { color: #888; font-style: italic; }
+    .tl-grip-spacer { visibility: hidden; }
+
+    /* inline rename input */
+    .tl-rename-input {
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid #777;
+      color: #ddd;
+      font-size: 11px;
+      font-family: inherit;
+      width: 80px;
+      outline: none;
+      padding: 0 2px;
+    }
+
+    /* ── Selection overlay ─────────────────────────────────── */
+    #select-overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 5;
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── New Document Modal ───────────────────────────────── -->
+  <div id="new-doc-modal">
+    <div id="new-doc-dialog">
+
+      <div class="nd-header">
+        <h2>New Document</h2>
+        <span id="nd-new-shortcut">Ctrl + N</span>
+      </div>
+
+      <!-- Presets -->
+      <div class="nd-section">
+        <div class="nd-section-label">Presets</div>
+        <div class="nd-presets-row">
+          <button class="nd-preset nd-on" data-w="1920" data-h="1080" data-unit="px">
+            <div class="nd-thumb" style="width:48px;height:27px"></div>
+            <span>HD</span>
+          </button>
+          <button class="nd-preset" data-w="3840" data-h="2160" data-unit="px">
+            <div class="nd-thumb" style="width:48px;height:27px"></div>
+            <span>4K</span>
+          </button>
+          <button class="nd-preset" data-w="1080" data-h="1080" data-unit="px">
+            <div class="nd-thumb" style="width:36px;height:36px"></div>
+            <span>Square</span>
+          </button>
+          <button class="nd-preset" data-w="1080" data-h="1350" data-unit="px">
+            <div class="nd-thumb" style="width:29px;height:36px"></div>
+            <span>Post</span>
+          </button>
+          <button class="nd-preset" data-w="8.27" data-h="11.69" data-unit="in">
+            <div class="nd-thumb" style="width:25px;height:36px"></div>
+            <span>A4</span>
+          </button>
+          <button class="nd-preset" data-w="8.5" data-h="11" data-unit="in">
+            <div class="nd-thumb" style="width:28px;height:36px"></div>
+            <span>Letter</span>
+          </button>
+          <button class="nd-preset" data-w="11.69" data-h="16.54" data-unit="in">
+            <div class="nd-thumb" style="width:25px;height:36px"></div>
+            <span>A3</span>
+          </button>
+          <button class="nd-preset" data-w="1200" data-h="628" data-unit="px">
+            <div class="nd-thumb" style="width:48px;height:25px"></div>
+            <span>Web</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Dimensions -->
+      <div class="nd-section">
+        <div class="nd-section-label">Dimensions</div>
+        <div class="nd-dims-row">
+          <div class="nd-dim-group">
+            <span class="nd-dim-label">W</span>
+            <input class="nd-num" type="number" id="nd-width" value="1920" min="0.001" max="99999" step="any">
+            <span class="nd-unit-lbl" id="nd-ulbl-w">px</span>
+          </div>
+          <span class="nd-x">×</span>
+          <div class="nd-dim-group">
+            <span class="nd-dim-label">H</span>
+            <input class="nd-num" type="number" id="nd-height" value="1080" min="0.001" max="99999" step="any">
+            <span class="nd-unit-lbl" id="nd-ulbl-h">px</span>
+          </div>
+        </div>
+        <div class="nd-unit-row">
+          <div class="nd-unit-btns">
+            <button class="nd-unit-btn nd-on" data-unit="px">px</button>
+            <button class="nd-unit-btn" data-unit="in">in</button>
+            <button class="nd-unit-btn" data-unit="cm">cm</button>
+            <button class="nd-unit-btn" data-unit="mm">mm</button>
+          </div>
+          <div class="nd-res-wrap" id="nd-res-wrap">
+            <span class="nd-dim-label">PPI</span>
+            <input class="nd-num" type="number" id="nd-dpi" value="300" min="1" max="2400" step="1">
+          </div>
+        </div>
+      </div>
+
+      <!-- Orientation -->
+      <div class="nd-section">
+        <div class="nd-section-label">Orientation</div>
+        <div class="nd-orient-row">
+          <button class="nd-orient-btn" id="nd-portrait">
+            <svg viewBox="0 0 20 28" width="20" height="28">
+              <rect x="1" y="1" width="18" height="26" fill="none" stroke="currentColor" stroke-width="1.8" rx="1"/>
+            </svg>
+            Portrait
+          </button>
+          <button class="nd-orient-btn nd-on" id="nd-landscape">
+            <svg viewBox="0 0 28 20" width="28" height="20">
+              <rect x="1" y="1" width="26" height="18" fill="none" stroke="currentColor" stroke-width="1.8" rx="1"/>
+            </svg>
+            Landscape
+          </button>
+        </div>
+      </div>
+
+      <!-- Background -->
+      <div class="nd-section">
+        <div class="nd-section-label">Background Color</div>
+        <div class="nd-bg-row">
+          <div class="nd-bg-swatch nd-on" data-bg="#ffffff" style="background:#ffffff" title="White"></div>
+          <div class="nd-bg-swatch" data-bg="#111111" style="background:#111111" title="Dark"></div>
+          <div class="nd-bg-swatch" data-bg="#000000" style="background:#000000" title="Black"></div>
+          <div class="nd-bg-swatch" data-bg="#ece9e0" style="background:#ece9e0" title="Paper"></div>
+          <div class="nd-bg-swatch" data-bg="#1a1614" style="background:#1a1614" title="Warm Dark"></div>
+          <div class="nd-bg-custom" id="nd-bg-custom" title="Custom color">
+            <input type="color" id="nd-bg-input" value="#ffffff">
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="nd-actions">
+        <button id="nd-create">Create Document</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Left Panel ──────────────────────────────────────── -->
+  <div id="left-panel">
+
+    <div id="panel-tabs">
+
+      <!-- Spawn & Grow: four pixel blocks, one fading to suggest growth -->
+      <div class="panel-tab active" data-section="sg" data-label="Spawn &amp; Grow">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="2" width="8" height="8" fill="currentColor"/>
+          <rect x="14" y="2" width="8" height="8" fill="currentColor"/>
+          <rect x="2" y="14" width="8" height="8" fill="currentColor"/>
+          <rect x="14" y="14" width="6" height="6" fill="currentColor" opacity="0.45"/>
+          <rect x="21" y="14" width="2" height="2" fill="currentColor" opacity="0.2"/>
+          <rect x="14" y="21" width="2" height="2" fill="currentColor" opacity="0.2"/>
+        </svg>
+      </div>
+
+      <!-- Dots: scattered circles of different sizes -->
+      <div class="panel-tab" data-section="dots" data-label="Dots">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="5"  cy="10" r="3"   fill="currentColor"/>
+          <circle cx="15" cy="7"  r="4.5" fill="currentColor"/>
+          <circle cx="19" cy="17" r="3"   fill="currentColor"/>
+          <circle cx="8"  cy="19" r="2"   fill="currentColor"/>
+        </svg>
+      </div>
+
+      <!-- Thread: three rows of zigzag stitch lines -->
+      <div class="panel-tab" data-section="threads" data-label="Thread">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <polyline points="2,7 6,4 10,7 14,4 18,7 22,4"   fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <polyline points="2,13 6,10 10,13 14,10 18,13 22,10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <polyline points="2,19 6,16 10,19 14,16 18,19 22,16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <!-- Water: concentric ripple rings -->
+      <div class="panel-tab" data-section="water" data-label="Water">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="3"  fill="none" stroke="currentColor" stroke-width="1.8"/>
+          <circle cx="12" cy="12" r="7"  fill="none" stroke="currentColor" stroke-width="1.3" opacity="0.6"/>
+          <circle cx="12" cy="12" r="11" fill="none" stroke="currentColor" stroke-width="1"   opacity="0.28"/>
+        </svg>
+      </div>
+
+      <!-- Glitch: horizontal bars offset from each other -->
+      <div class="panel-tab" data-section="glitch" data-label="Glitch">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2"  y="3"    width="14" height="3.5" fill="currentColor"/>
+          <rect x="8"  y="8.5"  width="14" height="3.5" fill="currentColor"/>
+          <rect x="0"  y="14"   width="14" height="3.5" fill="currentColor"/>
+          <rect x="6"  y="19.5" width="14" height="3.5" fill="currentColor" opacity="0.45"/>
+        </svg>
+      </div>
+
+      <!-- Hypa: branching root / mycelium structure -->
+      <div class="panel-tab" data-section="hypa" data-label="Hypa">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <line x1="12" y1="22" x2="12" y2="14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="12" y1="14" x2="5"  y2="7"  stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="12" y1="14" x2="19" y2="7"  stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="5"  y1="7"  x2="2"  y2="2"  stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+          <line x1="5"  y1="7"  x2="9"  y2="2"  stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+          <line x1="19" y1="7"  x2="15" y2="2"  stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+          <line x1="19" y1="7"  x2="22" y2="2"  stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+      <!-- Quicksand: solid block dissolving into falling particles -->
+      <div class="panel-tab" data-section="quicksand" data-label="Quicksand">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <rect x="4" y="2" width="16" height="9" rx="1" fill="currentColor" opacity="0.85"/>
+          <circle cx="7"  cy="16" r="1.5" fill="currentColor"/>
+          <circle cx="12" cy="18" r="1.5" fill="currentColor"/>
+          <circle cx="17" cy="15" r="1.5" fill="currentColor"/>
+          <circle cx="9"  cy="21" r="1"   fill="currentColor" opacity="0.5"/>
+          <circle cx="15" cy="21" r="1"   fill="currentColor" opacity="0.5"/>
+        </svg>
+      </div>
+
+      <!-- Pencil: scribble lines -->
+      <div class="panel-tab" data-section="pencil" data-label="Pencil">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <line x1="3"  y1="9"  x2="21" y2="9"  stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.9"/>
+          <line x1="3"  y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.75"/>
+          <line x1="3"  y1="15" x2="21" y2="15" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.6"/>
+          <path d="M6 6 Q8 4 10 6 Q12 8 14 6 Q16 4 18 6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          <path d="M6 18 Q9 20 12 18 Q15 16 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+      <!-- Pattern: 3×3 grid of alternating cross and ring marks -->
+      <div class="panel-tab" data-section="pattern" data-label="Pattern">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <line x1="2"  y1="2"  x2="6"  y2="6"  stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <line x1="6"  y1="2"  x2="2"  y2="6"  stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <circle cx="12" cy="4"  r="2.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <line x1="18" y1="2"  x2="22" y2="6"  stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <line x1="22" y1="2"  x2="18" y2="6"  stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <circle cx="4"  cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <rect x="9.5" y="9.5" width="5" height="5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <circle cx="20" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <line x1="2"  y1="18" x2="6"  y2="22" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <line x1="6"  y1="18" x2="2"  y2="22" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <circle cx="12" cy="20" r="2.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <line x1="18" y1="18" x2="22" y2="22" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <line x1="22" y1="18" x2="18" y2="22" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+      <!-- Stain: letter block with ink drips hanging below -->
+      <div class="panel-tab" data-section="stain" data-label="Stain">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <rect x="3" y="4" width="18" height="4.5" rx="0.5" fill="currentColor"/>
+          <line x1="5.5" y1="8.5" x2="5"   y2="17"  stroke="currentColor" stroke-width="2"   stroke-linecap="round"/>
+          <line x1="9.5" y1="8.5" x2="9.5" y2="21"  stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="13.5" y1="8.5" x2="13.5" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="17.5" y1="8.5" x2="18"  y2="19"  stroke="currentColor" stroke-width="2"   stroke-linecap="round"/>
+        </svg>
+      </div>
+
+    </div>
+
+    <!-- Spawn & Grow section -->
+    <div id="sec-sg" class="panel-section active">
+
+      <!-- Text input -->
+      <div>
+        <div class="sec-label">Text</div>
+        <textarea id="text-input" placeholder="Type here…" spellcheck="false"></textarea>
+        <div class="ctrl" style="margin-top:5px">
+          <div class="ctrl-label">Line Spacing <span class="ctrl-val" id="v-ls-sg">1.0</span></div>
+          <input type="range" id="sl-ls-sg" min="0.5" max="3.0" step="0.1" value="1.0">
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="btn-row">
+        <button class="btn" id="btn-spawn">Spawn</button>
+        <button class="btn" id="btn-grow">Grow</button>
+        <button class="btn" id="btn-reset">Reset</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Font Stroke -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Font Stroke <span class="ctrl-val" id="v-stroke">50</span>
+        </div>
+        <input type="range" id="sl-stroke" min="0" max="100" value="50">
+      </div>
+
+      <!-- Randomize -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Randomize <span class="ctrl-val" id="v-rand">0</span>
+        </div>
+        <input type="range" id="sl-rand" min="0" max="100" value="0">
+      </div>
+
+      <!-- Rotate -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Rotate <span class="ctrl-val" id="v-rot">0</span>
+        </div>
+        <input type="range" id="sl-rot" min="0" max="100" value="0">
+      </div>
+
+      <!-- Next Stroke -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Next Stroke <span class="ctrl-val" id="v-next">0</span>
+        </div>
+        <input type="range" id="sl-next" min="0" max="100" value="0">
+      </div>
+
+      <!-- Overlap -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Overlap <span class="ctrl-val" id="v-olap">0</span>
+        </div>
+        <input type="range" id="sl-olap" min="-50" max="50" value="0">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Color -->
+      <div>
+        <div class="sec-label">Block Color</div>
+        <div id="color-row">
+          <div id="color-swatch"></div>
+          <span id="color-label">#ffffff</span>
+          <input type="color" id="color-input" value="#ffffff">
+        </div>
+      </div>
+
+    </div><!-- /sec-sg -->
+
+    <!-- ── Dots section ──────────────────────────────────── -->
+    <div id="sec-dots" class="panel-section">
+
+      <!-- Text input -->
+      <div>
+        <div class="sec-label">Text</div>
+        <textarea id="dots-text-input" class="tab-textarea" placeholder="Type here…" spellcheck="false"></textarea>
+        <div class="ctrl" style="margin-top:5px">
+          <div class="ctrl-label">Line Spacing <span class="ctrl-val" id="v-ls-dots">1.0</span></div>
+          <input type="range" id="sl-ls-dots" min="0.5" max="3.0" step="0.1" value="1.0">
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="btn-row">
+        <button class="btn" id="btn-dots-spawn">Spawn</button>
+        <button class="btn" id="btn-dots-grow">Grow</button>
+        <button class="btn" id="btn-dots-reset">Reset</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Dot Size -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Dot Size <span class="ctrl-val" id="v-dot-size">6</span>
+        </div>
+        <input type="range" id="sl-dot-size" min="1" max="40" value="6">
+      </div>
+
+      <!-- Fill Spacing -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Fill Spacing <span class="ctrl-val" id="v-fill-spacing">8</span>
+        </div>
+        <input type="range" id="sl-fill-spacing" min="2" max="30" value="8">
+      </div>
+
+      <!-- Grow Amount -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Grow Amount <span class="ctrl-val" id="v-dot-grow">2</span>
+        </div>
+        <input type="range" id="sl-dot-grow" min="1" max="20" value="2">
+      </div>
+
+      <!-- Randomize -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Randomize <span class="ctrl-val" id="v-dot-rand">3</span>
+        </div>
+        <input type="range" id="sl-dot-rand" min="0" max="15" value="3">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Dots Outline toggle -->
+      <button class="btn" id="btn-outline-toggle" style="width:100%">Dots Outline: Off</button>
+
+      <!-- Outline Size -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Outline Size <span class="ctrl-val" id="v-outline-size">5</span>
+        </div>
+        <input type="range" id="sl-outline-size" min="1" max="30" value="5">
+      </div>
+
+      <!-- Outline Spacing -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Outline Spacing <span class="ctrl-val" id="v-outline-spacing">8</span>
+        </div>
+        <input type="range" id="sl-outline-spacing" min="4" max="40" value="8">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Color -->
+      <div>
+        <div class="sec-label">Dot Color</div>
+        <div class="color-row">
+          <div class="color-swatch" id="dots-color-swatch" style="background:#ffffff"></div>
+          <span class="color-label" id="dots-color-label">#ffffff</span>
+          <input type="color" id="dots-color-input" value="#ffffff">
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ── Polka Dots ────────────────────────────────────── -->
+      <div class="sec-label">Polka Dots</div>
+
+      <div class="btn-row">
+        <button class="btn" id="btn-polka-spawn" style="flex:2">Polka Dots</button>
+        <button class="btn" id="btn-polka-reset">Reset</button>
+      </div>
+
+      <!-- Dot Size -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Dot Size <span class="ctrl-val" id="v-polka-size">10</span>
+        </div>
+        <input type="range" id="sl-polka-size" min="2" max="30" value="10">
+      </div>
+
+      <!-- Grid Spacing -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Grid Spacing <span class="ctrl-val" id="v-polka-spacing">24</span>
+        </div>
+        <input type="range" id="sl-polka-spacing" min="8" max="60" value="24">
+      </div>
+
+      <!-- Jitter -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Jitter <span class="ctrl-val" id="v-polka-jitter">0</span>
+        </div>
+        <input type="range" id="sl-polka-jitter" min="0" max="15" value="0">
+      </div>
+
+      <!-- Size Variance -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Size Variance <span class="ctrl-val" id="v-polka-size-var">0</span>
+        </div>
+        <input type="range" id="sl-polka-size-var" min="0" max="100" value="0">
+      </div>
+
+      <!-- Opacity -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Opacity <span class="ctrl-val" id="v-polka-opacity">90</span>
+        </div>
+        <input type="range" id="sl-polka-opacity" min="10" max="100" value="90">
+      </div>
+
+      <button class="btn" id="btn-polka-hex" style="width:100%">Hex Grid: Off</button>
+
+      <div class="divider"></div>
+
+      <!-- ── Animation effect ─────────────────────────────── -->
+      <div class="sec-label">Animate</div>
+
+      <div class="btn-row">
+        <button class="btn" id="btn-anim-play" style="flex:2">Play</button>
+        <button class="btn" id="btn-anim-reset">Clear</button>
+      </div>
+
+      <!-- Max Dot Size -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Max Size <span class="ctrl-val" id="v-anim-max">10</span>
+        </div>
+        <input type="range" id="sl-anim-max" min="2" max="60" value="10">
+      </div>
+
+      <!-- Speed -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Speed <span class="ctrl-val" id="v-anim-speed">1</span>
+        </div>
+        <input type="range" id="sl-anim-speed" min="1" max="10" value="1">
+      </div>
+
+      <!-- Density -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Density <span class="ctrl-val" id="v-anim-density">4</span>
+        </div>
+        <input type="range" id="sl-anim-density" min="1" max="20" value="4">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ── Sand ──────────────────────────────────────────────── -->
+      <div class="sec-label">Sand</div>
+
+      <div class="btn-row">
+        <button class="btn" id="btn-sand" style="flex:2">Sand</button>
+        <button class="btn" id="btn-sand-reset">Reset</button>
+      </div>
+
+      <!-- Brush Size -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Brush Size <span class="ctrl-val" id="v-sand-brush">20</span>
+        </div>
+        <input type="range" id="sl-sand-brush" min="5" max="80" value="20">
+      </div>
+
+      <!-- Fall Speed -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Fall Speed <span class="ctrl-val" id="v-sand-speed">2</span>
+        </div>
+        <input type="range" id="sl-sand-speed" min="1" max="8" value="2">
+      </div>
+
+      <!-- Spread -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Spread <span class="ctrl-val" id="v-sand-spread">1</span>
+        </div>
+        <input type="range" id="sl-sand-spread" min="0" max="4" value="1">
+      </div>
+
+      <!-- Sand Color -->
+      <div>
+        <div class="sec-label">Sand Color</div>
+        <div class="color-row">
+          <div class="color-swatch" id="sand-color-swatch" style="background:#e8c97c"></div>
+          <span class="color-label" id="sand-color-label">#e8c97c</span>
+          <input type="color" id="sand-color-input" value="#e8c97c">
+        </div>
+      </div>
+
+    </div><!-- /sec-dots -->
+
+    <!-- ── Thread section ────────────────────────────────── -->
+    <div id="sec-threads" class="panel-section">
+
+      <!-- Text input -->
+      <div>
+        <div class="sec-label">Text</div>
+        <textarea id="threads-text-input" class="tab-textarea" placeholder="Type here…" spellcheck="false"></textarea>
+        <div class="ctrl" style="margin-top:5px">
+          <div class="ctrl-label">Line Spacing <span class="ctrl-val" id="v-ls-threads">1.0</span></div>
+          <input type="range" id="sl-ls-threads" min="0.5" max="3.0" step="0.1" value="1.0">
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="btn-row">
+        <button class="btn" id="btn-threads-build" style="flex:2">Build</button>
+        <button class="btn" id="btn-threads-reset">Reset</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="btn-threads-static">Static</button>
+        <button class="btn" id="btn-threads-play">Animate</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="btn-threads-freestyle" style="width:100%">Freestyle</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="btn-threads-drag" style="width:100%">Drag Threads</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Rows -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Rows <span class="ctrl-val" id="v-rows">20</span>
+        </div>
+        <input type="range" id="sl-rows" min="3" max="80" value="20">
+      </div>
+
+      <!-- Zigzag peaks per row -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Zigzag <span class="ctrl-val" id="v-zigzag">5</span>
+        </div>
+        <input type="range" id="sl-zigzag" min="1" max="20" value="5">
+      </div>
+
+      <!-- Thread count -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Threads <span class="ctrl-val" id="v-thread-count">15</span>
+        </div>
+        <input type="range" id="sl-thread-count" min="1" max="60" value="15">
+      </div>
+
+      <!-- Speed -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Speed <span class="ctrl-val" id="v-thread-speed">3</span>
+        </div>
+        <input type="range" id="sl-thread-speed" min="1" max="10" value="3">
+      </div>
+
+      <!-- Trail length -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Trail <span class="ctrl-val" id="v-trail">20</span>
+        </div>
+        <input type="range" id="sl-trail" min="3" max="80" value="20">
+      </div>
+
+      <!-- Line Weight -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Line Weight <span class="ctrl-val" id="v-line-weight">1</span>
+        </div>
+        <input type="range" id="sl-line-weight" min="0.5" max="5" step="0.5" value="1">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Freestyle controls -->
+      <div class="sec-label">Freestyle</div>
+
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Row Spacing <span class="ctrl-val" id="v-free-spacing">2</span>
+        </div>
+        <input type="range" id="sl-free-spacing" min="1" max="6" value="2">
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Gaps <span class="ctrl-val" id="v-free-gap">35</span>
+        </div>
+        <input type="range" id="sl-free-gap" min="0" max="80" value="35">
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Fringe Length <span class="ctrl-val" id="v-free-fringe">40</span>
+        </div>
+        <input type="range" id="sl-free-fringe" min="0" max="120" value="40">
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Diagonal <span class="ctrl-val" id="v-free-diag">0</span>
+        </div>
+        <input type="range" id="sl-free-diag" min="0" max="100" value="0">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Color -->
+      <div>
+        <div class="sec-label">Thread Color</div>
+        <div class="color-row">
+          <div class="color-swatch" id="threads-color-swatch" style="background:#ffffff"></div>
+          <span class="color-label" id="threads-color-label">#ffffff</span>
+          <input type="color" id="threads-color-input" value="#ffffff">
+        </div>
+      </div>
+
+    </div><!-- /sec-threads -->
+
+    <!-- ── Water section ────────────────────────────────────── -->
+    <div id="sec-water" class="panel-section">
+
+      <!-- Text input -->
+      <div>
+        <div class="sec-label">Text</div>
+        <textarea id="water-text-input" class="tab-textarea" placeholder="Type here…" spellcheck="false"></textarea>
+        <div class="ctrl" style="margin-top:5px">
+          <div class="ctrl-label">Line Spacing <span class="ctrl-val" id="v-ls-water">1.0</span></div>
+          <input type="range" id="sl-ls-water" min="0.5" max="3.0" step="0.1" value="1.0">
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="btn-row">
+        <button class="btn" id="btn-water-ripple" style="flex:2">Water Ripple</button>
+        <button class="btn" id="btn-water-reset">Reset</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Rings -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Rings <span class="ctrl-val" id="v-water-rings">10</span>
+        </div>
+        <input type="range" id="sl-water-rings" min="2" max="25" value="10">
+      </div>
+
+      <!-- Spacing -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Spacing <span class="ctrl-val" id="v-water-spacing">15</span>
+        </div>
+        <input type="range" id="sl-water-spacing" min="3" max="40" value="15">
+      </div>
+
+      <!-- Line Width -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Line Width <span class="ctrl-val" id="v-water-lw">1.5</span>
+        </div>
+        <input type="range" id="sl-water-lw" min="0.5" max="5" step="0.5" value="1.5">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Distortion Amount -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Distortion <span class="ctrl-val" id="v-water-distort">20</span>
+        </div>
+        <input type="range" id="sl-water-distort" min="0" max="50" value="20">
+      </div>
+
+      <!-- Direction buttons -->
+      <div>
+        <div class="sec-label">Distort Direction</div>
+        <div class="btn-row">
+          <button class="btn" id="btn-water-left">Left</button>
+          <button class="btn" id="btn-water-right">Right</button>
+          <button class="btn" id="btn-water-top">Top</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Color -->
+      <div>
+        <div class="sec-label">Ripple Color</div>
+        <div class="color-row">
+          <div class="color-swatch" id="water-color-swatch" style="background:#ffffff"></div>
+          <span class="color-label" id="water-color-label">#ffffff</span>
+          <input type="color" id="water-color-input" value="#ffffff">
+        </div>
+      </div>
+
+      <!-- Topo Lines -->
+      <button class="btn" id="btn-water-topo" style="width:100%">Topo Lines</button>
+      <div class="ctrl" style="margin-top:4px">
+        <div class="ctrl-label">Spacing <span class="ctrl-val" id="v-water-topo-spacing">10</span></div>
+        <input type="range" id="sl-water-topo-spacing" min="3" max="40" step="1" value="10">
+      </div>
+      <div class="ctrl">
+        <div class="ctrl-label">Spacing Jitter <span class="ctrl-val" id="v-water-topo-jitter">0</span></div>
+        <input type="range" id="sl-water-topo-jitter" min="0" max="100" step="1" value="0">
+      </div>
+      <div class="ctrl">
+        <div class="ctrl-label">Thickness <span class="ctrl-val" id="v-water-topo-thick">1.5</span></div>
+        <input type="range" id="sl-water-topo-thick" min="0.5" max="10" step="0.5" value="1.5">
+      </div>
+      <div class="ctrl">
+        <div class="ctrl-label">Thickness Jitter <span class="ctrl-val" id="v-water-topo-thickvar">0</span></div>
+        <input type="range" id="sl-water-topo-thickvar" min="0" max="100" step="1" value="0">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ── Water Pulse ─────────────────────────────────────── -->
+      <div class="sec-label">Water Pulse</div>
+
+      <div class="btn-row">
+        <button class="btn" id="btn-pulse-build" style="flex:2">Build</button>
+        <button class="btn" id="btn-pulse-reset">Reset</button>
+      </div>
+
+      <!-- Spread -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Spread <span class="ctrl-val" id="v-pulse-spread">30</span>
+        </div>
+        <input type="range" id="sl-pulse-spread" min="3" max="100" value="30">
+      </div>
+
+      <!-- Rings -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Rings <span class="ctrl-val" id="v-pulse-rings">12</span>
+        </div>
+        <input type="range" id="sl-pulse-rings" min="2" max="30" value="12">
+      </div>
+
+      <!-- Threshold -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Threshold <span class="ctrl-val" id="v-pulse-thresh">10</span>
+        </div>
+        <input type="range" id="sl-pulse-thresh" min="1" max="60" value="10">
+      </div>
+
+      <!-- Invert -->
+      <button class="btn" id="btn-pulse-invert" style="width:100%">Invert: Off</button>
+
+      <div class="divider"></div>
+
+      <!-- Topo Build -->
+      <div class="sec-label">Topo Contours</div>
+      <button class="btn" id="btn-pulse-topo" style="width:100%">Topo Build</button>
+      <div class="ctrl" style="margin-top:4px">
+        <div class="ctrl-label">Spacing <span class="ctrl-val" id="v-pulse-topo-spacing">10</span></div>
+        <input type="range" id="sl-pulse-topo-spacing" min="3" max="40" step="1" value="10">
+      </div>
+      <div class="ctrl">
+        <div class="ctrl-label">Spacing Jitter <span class="ctrl-val" id="v-pulse-topo-jitter">0</span></div>
+        <input type="range" id="sl-pulse-topo-jitter" min="0" max="100" step="1" value="0">
+      </div>
+      <div class="ctrl">
+        <div class="ctrl-label">Thickness <span class="ctrl-val" id="v-pulse-topo-thick">1.5</span></div>
+        <input type="range" id="sl-pulse-topo-thick" min="0.5" max="10" step="0.5" value="1.5">
+      </div>
+      <div class="ctrl">
+        <div class="ctrl-label">Thickness Jitter <span class="ctrl-val" id="v-pulse-topo-thickvar">0</span></div>
+        <input type="range" id="sl-pulse-topo-thickvar" min="0" max="100" step="1" value="0">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ── Water Drop ────────────────────────────────────────── -->
+      <div class="sec-label">Water Drop</div>
+
+      <div class="btn-row">
+        <button class="btn" id="btn-waterdrop-place" style="flex:2">Water Drop</button>
+        <button class="btn" id="btn-waterdrop-reset">Reset</button>
+      </div>
+
+      <div class="sec-label" style="font-size:8px;color:#444;line-height:1.5">
+        Click to place · drag to set size · move / resize existing drops
+      </div>
+
+      <!-- Magnification -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Magnify <span class="ctrl-val" id="v-waterdrop-mag">1.8</span>
+        </div>
+        <input type="range" id="sl-waterdrop-mag" min="1.1" max="4" step="0.1" value="1.8">
+      </div>
+
+      <!-- Blur -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Blur <span class="ctrl-val" id="v-waterdrop-blur">0</span>
+        </div>
+        <input type="range" id="sl-waterdrop-blur" min="0" max="20" step="0.5" value="0">
+      </div>
+
+      <!-- Outline Opacity -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Outline <span class="ctrl-val" id="v-waterdrop-outline">1</span>
+        </div>
+        <input type="range" id="sl-waterdrop-outline" min="0" max="1" step="0.05" value="1">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- ── Falling Water ───────────────────────────────────── -->
+      <div class="sec-label">Falling Water</div>
+
+      <div class="btn-row">
+        <button class="btn" id="btn-fw-select" style="flex:2">Select Letters</button>
+        <button class="btn" id="btn-fw-reset">Reset</button>
+      </div>
+
+      <div class="sec-label" style="font-size:8px;color:#444;line-height:1.4">
+        Drag over letters to melt them — unselected letters stay intact
+      </div>
+
+      <!-- Drip Speed -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Drip Speed <span class="ctrl-val" id="v-fw-speed">3</span>
+        </div>
+        <input type="range" id="sl-fw-speed" min="1" max="10" value="3">
+      </div>
+
+      <!-- Spread -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Spread <span class="ctrl-val" id="v-fw-spread">3</span>
+        </div>
+        <input type="range" id="sl-fw-spread" min="0" max="8" value="3">
+      </div>
+
+    </div><!-- /sec-water -->
+
+    <!-- ── Glitch section ────────────────────────────────────── -->
+    <div id="sec-glitch" class="panel-section">
+
+      <!-- Text input -->
+      <div>
+        <div class="sec-label">Text</div>
+        <textarea id="glitch-text-input" class="tab-textarea" placeholder="Type here…" spellcheck="false"></textarea>
+        <div class="ctrl" style="margin-top:5px">
+          <div class="ctrl-label">Line Spacing <span class="ctrl-val" id="v-ls-glitch">1.0</span></div>
+          <input type="range" id="sl-ls-glitch" min="0.5" max="3.0" step="0.1" value="1.0">
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="btn-row">
+        <button class="btn" id="btn-glitch-grid" style="flex:2">Grid Glitch</button>
+        <button class="btn" id="btn-glitch-reset">Reset</button>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" id="btn-glitch-reseed" style="width:100%">Reseed</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Rows -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Rows <span class="ctrl-val" id="v-glitch-rows">8</span>
+        </div>
+        <input type="range" id="sl-glitch-rows" min="3" max="30" value="8">
+      </div>
+
+      <!-- Cols -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Cols <span class="ctrl-val" id="v-glitch-cols">4</span>
+        </div>
+        <input type="range" id="sl-glitch-cols" min="1" max="12" value="4">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Shift -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Shift <span class="ctrl-val" id="v-glitch-shift">30</span>
+        </div>
+        <input type="range" id="sl-glitch-shift" min="0" max="80" value="30">
+      </div>
+
+      <!-- Density -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Density <span class="ctrl-val" id="v-glitch-density">55</span>
+        </div>
+        <input type="range" id="sl-glitch-density" min="0" max="100" value="55">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Color Refraction -->
+      <div class="sec-label">Color Refraction</div>
+
+      <button class="btn" id="btn-glitch-refract" style="width:100%">Color Refraction</button>
+
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Refraction <span class="ctrl-val" id="v-glitch-refract">15</span>
+        </div>
+        <input type="range" id="sl-glitch-refract" min="0" max="50" value="15">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Color -->
+      <div>
+        <div class="sec-label">Glitch Color</div>
+        <div class="color-row">
+          <div class="color-swatch" id="glitch-color-swatch" style="background:#ffffff"></div>
+          <span class="color-label" id="glitch-color-label">#ffffff</span>
+          <input type="color" id="glitch-color-input" value="#ffffff">
+        </div>
+      </div>
+
+    </div><!-- /sec-glitch -->
+
+    <!-- ── Hypa section ──────────────────────────────────────── -->
+    <div id="sec-hypa" class="panel-section">
+
+      <!-- Text input -->
+      <div>
+        <div class="sec-label">Text</div>
+        <textarea id="hypa-text-input" class="tab-textarea" placeholder="Type here…" spellcheck="false"></textarea>
+        <div class="ctrl" style="margin-top:5px">
+          <div class="ctrl-label">Line Spacing <span class="ctrl-val" id="v-ls-hypa">1.0</span></div>
+          <input type="range" id="sl-ls-hypa" min="0.5" max="3.0" step="0.1" value="1.0">
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="btn-row">
+        <button class="btn" id="btn-hypa-grow" style="flex:2">Grow</button>
+        <button class="btn" id="btn-hypa-reset">Reset</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Density -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Density <span class="ctrl-val" id="v-hypa-density">40</span>
+        </div>
+        <input type="range" id="sl-hypa-density" min="5" max="100" value="40">
+      </div>
+
+      <!-- Length -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Length <span class="ctrl-val" id="v-hypa-length">120</span>
+        </div>
+        <input type="range" id="sl-hypa-length" min="20" max="400" value="120">
+      </div>
+
+      <!-- Wiggle -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Wiggle <span class="ctrl-val" id="v-hypa-wiggle">35</span>
+        </div>
+        <input type="range" id="sl-hypa-wiggle" min="0" max="100" value="35">
+      </div>
+
+      <!-- Branch -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Branch <span class="ctrl-val" id="v-hypa-branch">40</span>
+        </div>
+        <input type="range" id="sl-hypa-branch" min="0" max="100" value="40">
+      </div>
+
+      <!-- Thickness -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Thickness <span class="ctrl-val" id="v-hypa-thickness">0.8</span>
+        </div>
+        <input type="range" id="sl-hypa-thickness" min="0.2" max="3" step="0.1" value="0.8">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Color -->
+      <div>
+        <div class="sec-label">Root Color</div>
+        <div class="color-row">
+          <div class="color-swatch" id="hypa-color-swatch" style="background:#ffffff"></div>
+          <span class="color-label" id="hypa-color-label">#ffffff</span>
+          <input type="color" id="hypa-color-input" value="#ffffff">
+        </div>
+      </div>
+
+    </div><!-- /sec-hypa -->
+
+    <!-- ── Quicksand section ───────────────────────────────────── -->
+    <div id="sec-quicksand" class="panel-section">
+
+      <!-- Text input -->
+      <div>
+        <div class="sec-label">Text</div>
+        <textarea id="qs-text-input" class="tab-textarea" placeholder="Type here…" spellcheck="false"></textarea>
+        <div class="ctrl" style="margin-top:5px">
+          <div class="ctrl-label">Line Spacing <span class="ctrl-val" id="v-ls-qs">1.0</span></div>
+          <input type="range" id="sl-ls-qs" min="0.5" max="3.0" step="0.1" value="1.0">
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="btn-row">
+        <button class="btn" id="btn-qs-select" style="flex:2">Select</button>
+        <button class="btn" id="btn-qs-reset">Reset</button>
+      </div>
+
+      <div class="sec-label" style="font-size:8px;color:#444;line-height:1.4">
+        Drag a rectangle over part of a letter — only that region falls as sand
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Fall Speed -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Fall Speed <span class="ctrl-val" id="v-qs-speed">2</span>
+        </div>
+        <input type="range" id="sl-qs-speed" min="1" max="15" value="1">
+      </div>
+
+      <!-- Spread -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Spread <span class="ctrl-val" id="v-qs-spread">1</span>
+        </div>
+        <input type="range" id="sl-qs-spread" min="0" max="4" value="1">
+      </div>
+
+      <!-- Grain Size -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Grain Size <span class="ctrl-val" id="v-qs-grain">2</span>
+        </div>
+        <input type="range" id="sl-qs-grain" min="1" max="5" value="2">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Letter / Sand Color (grains always match letter color) -->
+      <div>
+        <div class="sec-label">Letter Color</div>
+        <div class="color-row">
+          <div class="color-swatch" id="qs-text-swatch" style="background:#ffffff"></div>
+          <span class="color-label" id="qs-text-label">#ffffff</span>
+          <input type="color" id="qs-text-input-color" value="#ffffff">
+        </div>
+      </div>
+
+    </div><!-- /sec-quicksand -->
+
+    <!-- ── Pattern section ──────────────────────────────────────── -->
+    <div id="sec-pattern" class="panel-section">
+
+      <!-- Text input -->
+      <div>
+        <div class="sec-label">Text</div>
+        <textarea id="pattern-text-input" class="tab-textarea" placeholder="Type here…" spellcheck="false"></textarea>
+        <div class="ctrl" style="margin-top:5px">
+          <div class="ctrl-label">Line Spacing <span class="ctrl-val" id="v-ls-pattern">1.0</span></div>
+          <input type="range" id="sl-ls-pattern" min="0.5" max="3.0" step="0.1" value="1.0">
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="btn-row">
+        <button class="btn" id="btn-pattern-build" style="flex:2">Build</button>
+        <button class="btn" id="btn-pattern-reset">Reset</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Pattern picker -->
+      <div>
+        <div class="sec-label">Patterns — click to toggle, select multiple to mix</div>
+        <div class="pat-grid">
+          <button class="pat-tile" data-pat="0">
+            <canvas width="36" height="36"></canvas>
+            <span class="pat-tile-label">Cross</span>
+          </button>
+          <button class="pat-tile" data-pat="1">
+            <canvas width="36" height="36"></canvas>
+            <span class="pat-tile-label">Plus</span>
+          </button>
+          <button class="pat-tile" data-pat="2">
+            <canvas width="36" height="36"></canvas>
+            <span class="pat-tile-label">Ring</span>
+          </button>
+          <button class="pat-tile" data-pat="3">
+            <canvas width="36" height="36"></canvas>
+            <span class="pat-tile-label">Dot</span>
+          </button>
+          <button class="pat-tile" data-pat="4">
+            <canvas width="36" height="36"></canvas>
+            <span class="pat-tile-label">Diamond</span>
+          </button>
+          <button class="pat-tile" data-pat="5">
+            <canvas width="36" height="36"></canvas>
+            <span class="pat-tile-label">Square</span>
+          </button>
+          <button class="pat-tile" data-pat="6">
+            <canvas width="36" height="36"></canvas>
+            <span class="pat-tile-label">Star</span>
+          </button>
+          <button class="pat-tile" data-pat="7">
+            <canvas width="36" height="36"></canvas>
+            <span class="pat-tile-label">Triangle</span>
+          </button>
+          <button class="pat-tile" data-pat="8">
+            <canvas width="36" height="36"></canvas>
+            <span class="pat-tile-label">Checker</span>
+          </button>
+          <button class="pat-tile" data-pat="9">
+            <canvas width="36" height="36"></canvas>
+            <span class="pat-tile-label">Slash</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Remix button — reshuffles mix without rebuilding the mask -->
+      <button class="btn" id="btn-pattern-remix" style="width:100%">Remix</button>
+
+      <div class="divider"></div>
+
+      <!-- Letter Expand -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Expand <span class="ctrl-val" id="v-pattern-expand">0</span>
+        </div>
+        <input type="range" id="sl-pattern-expand" min="0" max="40" value="0">
+      </div>
+
+      <!-- Cell Size -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Cell Size <span class="ctrl-val" id="v-pattern-cell">14</span>
+        </div>
+        <input type="range" id="sl-pattern-cell" min="4" max="40" value="14">
+      </div>
+
+      <!-- Stroke Weight -->
+      <div class="ctrl">
+        <div class="ctrl-label">
+          Stroke <span class="ctrl-val" id="v-pattern-stroke">1</span>
+        </div>
+        <input type="range" id="sl-pattern-stroke" min="0.3" max="3" step="0.1" value="1">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Color -->
+      <div>
+        <div class="sec-label">Pattern Color</div>
+        <div class="color-row">
+          <div class="color-swatch" id="pattern-color-swatch" style="background:#ffffff"></div>
+          <span class="color-label" id="pattern-color-label">#ffffff</span>
+          <input type="color" id="pattern-color-input" value="#ffffff">
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Background Pattern -->
+      <div class="sec-label">Background Pattern</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+        <button class="btn bg-pat-btn btn-on" id="btn-bgpat-none">None</button>
+        <button class="btn bg-pat-btn" id="btn-bgpat-grid">Grid</button>
+        <button class="btn bg-pat-btn" id="btn-bgpat-hex">Hex</button>
+        <button class="btn bg-pat-btn" id="btn-bgpat-waves">Waves</button>
+        <button class="btn bg-pat-btn" id="btn-bgpat-spirals">Spirals</button>
+        <button class="btn bg-pat-btn" id="btn-bgpat-dots">Dots</button>
+        <button class="btn bg-pat-btn" id="btn-bgpat-web">Web</button>
+        <button class="btn bg-pat-btn" id="btn-bgpat-weave">Weave</button>
+      </div>
+
+      <div class="ctrl" style="margin-top:8px">
+        <div class="ctrl-label">Scale <span class="ctrl-val" id="v-bgpat-scale">30</span></div>
+        <input type="range" id="sl-bgpat-scale" min="2" max="300" step="1" value="30">
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-label">Density <span class="ctrl-val" id="v-bgpat-density">40</span></div>
+        <input type="range" id="sl-bgpat-density" min="0" max="100" step="1" value="40">
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-label">Distortion <span class="ctrl-val" id="v-bgpat-distortion">0</span></div>
+        <input type="range" id="sl-bgpat-distortion" min="0" max="100" step="1" value="0">
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-label">Rotation <span class="ctrl-val" id="v-bgpat-rotation">0</span>°</div>
+        <input type="range" id="sl-bgpat-rotation" min="0" max="360" step="1" value="0">
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-label">Reach <span class="ctrl-val" id="v-bgpat-reach">60</span></div>
+        <input type="range" id="sl-bgpat-reach" min="0" max="300" step="2" value="60">
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-label">Falloff <span class="ctrl-val" id="v-bgpat-falloff">60</span></div>
+        <input type="range" id="sl-bgpat-falloff" min="0" max="100" step="1" value="60">
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-label">Inner Fill <span class="ctrl-val" id="v-bgpat-inner">0</span></div>
+        <input type="range" id="sl-bgpat-inner" min="0" max="100" step="1" value="0">
+      </div>
+
+      <div style="margin-top:8px">
+        <div class="sec-label">Pattern Color</div>
+        <div class="color-row">
+          <div class="color-swatch" id="bgpat-color-a-swatch" style="background:#444444"></div>
+          <span class="color-label" id="bgpat-color-a-label">#444444</span>
+          <input type="color" id="bgpat-color-a-input" value="#444444">
+        </div>
+      </div>
+
+      <div style="margin-top:6px">
+        <div class="sec-label">Background Color</div>
+        <div class="color-row">
+          <div class="color-swatch" id="bgpat-color-b-swatch" style="background:#111111"></div>
+          <span class="color-label" id="bgpat-color-b-label">#111111</span>
+          <input type="color" id="bgpat-color-b-input" value="#111111">
+        </div>
+      </div>
+
+    </div><!-- /sec-pattern -->
+
+    <!-- ── Pencil section ────────────────────────────────────── -->
+    <div id="sec-pencil" class="panel-section">
+
+      <!-- Text input -->
+      <div>
+        <div class="sec-label">Text</div>
+        <textarea id="pencil-text-input" class="tab-textarea" placeholder="Type here…" spellcheck="false"></textarea>
+        <div class="ctrl" style="margin-top:5px">
+          <div class="ctrl-label">Line Spacing <span class="ctrl-val" id="v-ls-pencil">1.0</span></div>
+          <input type="range" id="sl-ls-pencil" min="0.5" max="3.0" step="0.1" value="1.0">
+        </div>
+        <div class="ctrl" style="margin-top:5px">
+          <div class="ctrl-label">Font Thickness <span class="ctrl-val" id="v-pencil-thickness">0</span></div>
+          <input type="range" id="sl-pencil-thickness" min="0" max="20" step="1" value="0">
+        </div>
+        <div class="ctrl" style="margin-top:5px">
+          <div class="ctrl-label">Text → Background Blend <span class="ctrl-val" id="v-pencil-blend">0</span></div>
+          <input type="range" id="sl-pencil-blend" min="0" max="120" step="2" value="0">
+        </div>
+      </div>
+
+      <!-- Build / Reset -->
+      <div class="btn-row">
+        <button class="btn" id="btn-pencil-build" style="flex:2">Build</button>
+        <button class="btn" id="btn-pencil-reset">Reset</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Fill density -->
+      <div class="ctrl">
+        <div class="ctrl-label">Density <span class="ctrl-val" id="v-pencil-density">6</span></div>
+        <input type="range" id="sl-pencil-density" min="1" max="14" step="1" value="6">
+      </div>
+
+      <!-- Row spacing -->
+      <div class="ctrl">
+        <div class="ctrl-label">Row Spacing <span class="ctrl-val" id="v-pencil-spacing">2</span></div>
+        <input type="range" id="sl-pencil-spacing" min="1" max="8" step="1" value="2">
+      </div>
+
+      <!-- Fill wiggle -->
+      <div class="ctrl">
+        <div class="ctrl-label">Fill Wiggle <span class="ctrl-val" id="v-pencil-wiggle">5</span></div>
+        <input type="range" id="sl-pencil-wiggle" min="0" max="20" step="0.5" value="5">
+      </div>
+
+      <!-- Stroke weight -->
+      <div class="ctrl">
+        <div class="ctrl-label">Stroke Weight <span class="ctrl-val" id="v-pencil-weight">0.65</span></div>
+        <input type="range" id="sl-pencil-weight" min="0.2" max="2.5" step="0.05" value="0.65">
+      </div>
+
+      <!-- Diagonal hatching -->
+      <div class="ctrl">
+        <div class="ctrl-label">Diagonal Hatch <span class="ctrl-val" id="v-pencil-diag">3</span></div>
+        <input type="range" id="sl-pencil-diag" min="0" max="10" step="1" value="3">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Outline passes -->
+      <div class="ctrl">
+        <div class="ctrl-label">Outline Passes <span class="ctrl-val" id="v-pencil-outpasses">5</span></div>
+        <input type="range" id="sl-pencil-outpasses" min="0" max="12" step="1" value="5">
+      </div>
+
+      <!-- Outline wiggle -->
+      <div class="ctrl">
+        <div class="ctrl-label">Outline Wiggle <span class="ctrl-val" id="v-pencil-outline">10</span></div>
+        <input type="range" id="sl-pencil-outline" min="0" max="30" step="0.5" value="10">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Pencil color -->
+      <div>
+        <div class="sec-label">Pencil Color</div>
+        <div class="color-row">
+          <div class="color-swatch" id="pencil-color-swatch" style="background:#1a1818"></div>
+          <span class="color-label" id="pencil-color-label">#1a1818</span>
+          <input type="color" id="pencil-color-input" value="#1a1818">
+        </div>
+      </div>
+
+      <!-- Paper color -->
+      <div>
+        <div class="sec-label">Paper Color</div>
+        <div class="color-row">
+          <div class="color-swatch" id="pencil-bg-swatch" style="background:#ece9e0"></div>
+          <span class="color-label" id="pencil-bg-label">#ece9e0</span>
+          <input type="color" id="pencil-bg-input" value="#ece9e0">
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Stitch / embroidery -->
+      <div class="sec-label">Stitch Type</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+        <button class="btn stitch-mode-btn btn-on" id="btn-stitch-none">None</button>
+        <button class="btn stitch-mode-btn" id="btn-stitch-dot">Dot</button>
+        <button class="btn stitch-mode-btn" id="btn-stitch-seed">Seed</button>
+        <button class="btn stitch-mode-btn" id="btn-stitch-run">Running</button>
+        <button class="btn stitch-mode-btn" id="btn-stitch-cross">Cross</button>
+      </div>
+
+      <div class="ctrl" style="margin-top:8px">
+        <div class="ctrl-label">Ring Spacing <span class="ctrl-val" id="v-stitch-spacing">14</span></div>
+        <input type="range" id="sl-stitch-spacing" min="6" max="60" step="2" value="14">
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-label">Stitch Size <span class="ctrl-val" id="v-stitch-size">5</span></div>
+        <input type="range" id="sl-stitch-size" min="2" max="16" step="1" value="5">
+      </div>
+
+    </div><!-- /sec-pencil -->
+
+    <!-- ── Stain ──────────────────────────────────────────────── -->
+    <div id="sec-stain" class="panel-section">
+
+      <!-- Text input -->
+      <div>
+        <div class="sec-label">Text</div>
+        <textarea id="stain-text-input" class="tab-textarea" placeholder="Type here…" spellcheck="false"></textarea>
+        <div class="ctrl" style="margin-top:5px">
+          <div class="ctrl-label">Line Spacing <span class="ctrl-val" id="v-stain-ls">1.0</span></div>
+          <input type="range" id="sl-stain-ls" min="0.5" max="3.0" step="0.1" value="1.0">
+        </div>
+      </div>
+
+      <!-- Bold + Build + Reset -->
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn btn-on" id="btn-stain-bold">Bold</button>
+        <button class="btn" id="btn-stain-build" style="flex:2">Build</button>
+        <button class="btn" id="btn-stain-reset">Reset</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Direction -->
+      <div class="sec-label">Direction</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+        <button class="btn stain-dir-btn btn-on" data-dir="down">Down</button>
+        <button class="btn stain-dir-btn" data-dir="up">Up</button>
+        <button class="btn stain-dir-btn" data-dir="left">Left</button>
+        <button class="btn stain-dir-btn" data-dir="right">Right</button>
+        <button class="btn stain-dir-btn" data-dir="all">All</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Drip density -->
+      <div class="ctrl">
+        <div class="ctrl-label">Drip Density <span class="ctrl-val" id="v-stain-density">0.7</span></div>
+        <input type="range" id="sl-stain-density" min="0.05" max="1.0" step="0.05" value="0.7">
+      </div>
+
+      <!-- Max length -->
+      <div class="ctrl">
+        <div class="ctrl-label">Max Length <span class="ctrl-val" id="v-stain-length">200</span></div>
+        <input type="range" id="sl-stain-length" min="20" max="600" step="10" value="200">
+      </div>
+
+      <!-- Lateral spread -->
+      <div class="ctrl">
+        <div class="ctrl-label">Spread <span class="ctrl-val" id="v-stain-spread">3</span></div>
+        <input type="range" id="sl-stain-spread" min="0" max="14" step="1" value="3">
+      </div>
+
+      <!-- Persistence / decay -->
+      <div class="ctrl">
+        <div class="ctrl-label">Persistence <span class="ctrl-val" id="v-stain-decay">0.975</span></div>
+        <input type="range" id="sl-stain-decay" min="0.90" max="0.999" step="0.001" value="0.975">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Ink color -->
+      <div>
+        <div class="sec-label">Ink Color</div>
+        <div class="color-row">
+          <div class="color-swatch" id="stain-ink-swatch" style="background:#0a0a0a"></div>
+          <span class="color-label" id="stain-ink-label">#0a0a0a</span>
+          <input type="color" id="stain-ink-input" value="#0a0a0a">
+        </div>
+      </div>
+
+      <!-- Paper color -->
+      <div>
+        <div class="sec-label">Paper Color</div>
+        <div class="color-row">
+          <div class="color-swatch" id="stain-bg-swatch" style="background:#f5f5f0"></div>
+          <span class="color-label" id="stain-bg-label">#f5f5f0</span>
+          <input type="color" id="stain-bg-input" value="#f5f5f0">
+        </div>
+      </div>
+
+    </div><!-- /sec-stain -->
+
+    <!-- ── Layers ────────────────────────────────────────────── -->
+    <div id="sec-layers">
+      <div class="layers-header">
+        <span class="sec-label" style="margin:0">Layers</span>
+      </div>
+      <div id="layer-list">
+        <div class="layer-empty">No pinned layers</div>
+      </div>
+    </div>
+
+  </div><!-- /left-panel -->
+
+  <!-- ── Canvas ───────────────────────────────────────────── -->
+  <div id="canvas-area">
+    <div id="canvas-wrapper">
+      <canvas id="main-canvas"></canvas>
+      <canvas id="select-overlay"></canvas>
+    </div>
+
+    <!-- Text layers panel -->
+    <div id="text-layers-panel">
+      <div class="tl-header">
+        <span class="tl-title">Layers</span>
+        <button id="tl-add-layer" title="Add new layer">+</button>
+      </div>
+      <div id="text-layers-list"></div>
+    </div>
+
+    <button id="btn-new">New</button>
+    <button id="btn-pin">Pin Layer</button>
+    <button id="btn-save">Save</button>
+  </div>
+
+  <!-- ── Save modal ────────────────────────────────────────── -->
+  <div id="save-modal">
+    <div id="save-dialog">
+      <h2>Export</h2>
+
+      <div>
+        <div class="save-section-label">Format</div>
+        <div class="save-formats">
+          <button class="save-fmt save-fmt-on" data-fmt="png">PNG</button>
+          <button class="save-fmt" data-fmt="jpeg">JPEG</button>
+          <button class="save-fmt" data-fmt="webp">WEBP</button>
+          <button class="save-fmt" data-fmt="video">Video</button>
+        </div>
+      </div>
+
+      <div>
+        <label class="save-transp-row">
+          <input type="checkbox" id="save-transp">
+          <span>Transparent background</span>
+        </label>
+        <p id="save-hint">Check transparent background to remove the dark fill.</p>
+      </div>
+
+      <div class="save-actions">
+        <button id="save-cancel">Cancel</button>
+        <button id="save-download">Download</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="canvas.js"></script>
+  <script src="new-document.js"></script>
+  <script src="text-layers.js"></script>
+  <script src="layers.js"></script>
+  <script src="spawnandgrow.js"></script>
+  <script src="dots.js"></script>
+  <script src="sand.js"></script>
+  <script src="threads.js"></script>
+  <script src="water.js"></script>
+  <script src="glitch.js"></script>
+  <script src="hypa.js"></script>
+  <script src="quicksand.js"></script>
+  <script src="fallingwater.js"></script>
+  <script src="pattern.js"></script>
+  <script src="pencil.js"></script>
+  <script src="stain.js"></script>
+  <script src="waterdrop.js"></script>
+  <script src="save.js"></script>
+</body>
+</html>
